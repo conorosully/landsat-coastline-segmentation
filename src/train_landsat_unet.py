@@ -19,6 +19,8 @@ import torchvision
 from torchvision import transforms
 from torch.utils.data import DataLoader
 
+from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
+
 # Variables
 train_path = "../data/training/" #UPDATE
 save_path = "../models/{}.pth" #UPDATE
@@ -29,25 +31,26 @@ batch_size = 32
 # System arguments
 try:
     model_name = sys.argv[1]
-    sample = bool(sys.argv[2])
+    sample = sys.argv[2]=="True"
     incl_bands = np.array(list(sys.argv[3])).astype(int) - 1
+    model_type = sys.argv[4]
 
     print("Training model: {}".format(model_name))
     print("Sample: {}".format(sample))
     print("Include bands: {}".format(incl_bands))
+    print("Model type: {}".format(model_type))
     print("Using device: {}\n".format(device))
 except:
     model_name = "DEFAULT"
     sample = False
     incl_bands = np.array([0,1,2,3,4,5,6])
-
-
+    model_type = "U_Net"
 
 # Classes
 class TrainDataset(torch.utils.data.Dataset):
-    def __init__(self, paths):
+    def __init__(self, paths,target=-1):
         self.paths = paths
-
+        self.target = target
 
     def __getitem__(self, idx):
         """Get image and binary mask for a given index"""
@@ -68,7 +71,7 @@ class TrainDataset(torch.utils.data.Dataset):
         bands = torch.tensor(bands)
 
         # Get target
-        mask_1 = instance[:,:,-1].astype(np.int8) # Water = 1, Land = 0
+        mask_1 = instance[:,:,self.target].astype(np.int8) # Water = 1, Land = 0
         mask_0 = 1-mask_1 
 
         target = np.array([mask_0,mask_1])
@@ -79,90 +82,6 @@ class TrainDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.paths)
 
-class conv_block(nn.Module):
-    def __init__(self, in_c, out_c):
-        super().__init__()
-        self.conv1 = nn.Conv2d(in_c, out_c, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm2d(out_c)
-        self.conv2 = nn.Conv2d(out_c, out_c, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm2d(out_c)
-        self.elu = nn.ELU()
-    
-
-    def forward(self, inputs):
-        #Layer 1
-        x = self.conv1(inputs) #convolution
-        x = self.elu(x) #activation
-        x = self.bn1(x) #normalisation
-        
-        #Layer 2
-        x = self.conv2(x)
-        x = self.elu(x)
-        x = self.bn2(x)
-        
-        return x
-
-class encoder_block(nn.Module):
-    def __init__(self, in_c, out_c):
-        super().__init__()
-        self.conv = conv_block(in_c, out_c) 
-        self.pool = nn.MaxPool2d((2, 2)) 
-    def forward(self, inputs):
-        x = self.conv(inputs) #convolutional block
-        p = self.pool(x) #max pooling
-        return x, p
-
-class decoder_block(nn.Module):
-
-    def __init__(self, in_c, out_c):
-        super().__init__()
-        self.up = nn.ConvTranspose2d(in_c, out_c, kernel_size=2, stride=2, padding=0) 
-        self.conv = conv_block(out_c+out_c, out_c) 
-
-    def forward(self, inputs, skip):
-        x = self.up(inputs) #upsampling
-        x = torch.cat([x, skip], axis=1)
-        x = self.conv(x) #convolutional block
-        return x
-
-class build_unet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        """ Encoder """
-        n_bands = len(incl_bands)
-        self.e1 = encoder_block(n_bands, 32)
-        self.e2 = encoder_block(32, 64)
-        self.e3 = encoder_block(64, 128)
-        self.e4 = encoder_block(128, 256)
-        """ Bottleneck """
-        self.b = conv_block(256, 512)
-        """ Decoder """
-        self.d1 = decoder_block(512, 256)
-        self.d2 = decoder_block(256, 128)
-        self.d3 = decoder_block(128, 64)
-        self.d4 = decoder_block(64, 32)
-        """ Classifier """
-        self.outputs = nn.Conv2d(32, 2, kernel_size=1, padding=0)
-        self.sm = nn.Softmax(dim=1)
-
-    def forward(self, inputs):
-        """ Encoder """
-        s1, p1 = self.e1(inputs)
-        s2, p2 = self.e2(p1)
-        s3, p3 = self.e3(p2)
-        s4, p4 = self.e4(p3)
-        """ Bottleneck """
-        b = self.b(p4)
-        """ Decoder """
-        d1 = self.d1(b, s4)
-        d2 = self.d2(d1, s3)
-        d3 = self.d3(d2, s2)
-        d4 = self.d4(d3, s1)
-        """ Classifier """
-        outputs = self.outputs(d4)
-        outputs = self.sm(outputs) 
-
-        return outputs
 
 # Functions
 def load_data():
@@ -175,6 +94,7 @@ def load_data():
         paths = paths[:1000]
 
     # Shuffle the paths
+    random.seed(42)
     random.shuffle(paths)
 
     # Create a datasets for training and validation
@@ -202,11 +122,21 @@ def load_data():
 def train_model(train_loader, valid_loader,ephocs=50):
     
     # define the model
-    model = build_unet()
+    if model_type == "U_Net":
+        model = U_Net(len(incl_bands),2)
+    elif model_type == "R2U_Net":
+        model = R2U_Net(len(incl_bands),2)
+    elif model_type == "AttU_Net":
+        model = AttU_Net(len(incl_bands),2)
+    elif model_type == "R2AttU_Net":
+        model = R2AttU_Net(len(incl_bands),2)
+
+
     model.to(device)
     
     # specify loss function (binary cross-entropy)
     criterion = nn.CrossEntropyLoss()
+    sm = nn.Softmax(dim=1)
 
     # specify optimizer
     optimizer = torch.optim.Adam(model.parameters())
@@ -229,6 +159,7 @@ def train_model(train_loader, valid_loader,ephocs=50):
 
             # Execute model to get outputs
             output = model(images)
+            output = sm(output)
          
             # Calculate loss
             loss = criterion(output, target)

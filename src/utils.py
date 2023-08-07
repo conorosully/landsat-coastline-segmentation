@@ -5,8 +5,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 import rasterio as rio
+import spyndex
+import xarray as xr
 
 base_path = '../data/'
+save_path = '/Users/conorosullivan/Google Drive/My Drive/UCD/research/Journal Paper 1 - Irish coastline with landsat/figures'
+
+def save_fig(fig,name):
+    """Save figure to figures folder"""
+    fig.savefig(save_path + f'/{name}.png',dpi=300,bbox_inches='tight')
 
 def get_bands(ID):
     #Load all bands for a given landsat image
@@ -40,11 +47,18 @@ def get_bands(ID):
 def get_mask(id):
     # Load the coastline mask for a given landsat image
 
-    mask_path = base_path + f'clean labels/{id}.npy'
+    mask_path = base_path + f'clean masks/{id}.npy'
     mask  = np.load(mask_path)
     mask = mask.astype('uint8')
 
     return mask
+
+def get_stack(id,path="stacked"):
+    """Load the stacked bands and mask for a given landsat image"""
+    stack_path = base_path + f'{path}/{id}.npy'
+    stack = np.load(stack_path)
+
+    return stack
 
 def get_geolocation(id):
     """Load raster used for pixel geolocation"""
@@ -70,8 +84,8 @@ def display_bands(bands,mask=False):
     n = 7
 
     if mask:
-        n = 8
-        band_names = ['Blue', 'Green', 'Red', 'NIR', 'SWIR1', 'SWIR2', 'Thermal','Mask']
+        n = 9
+        band_names = ['Blue', 'Green', 'Red', 'NIR', 'SWIR1', 'SWIR2', 'Thermal','QA','Mask']
     
     fig, axs = plt.subplots(1, n, figsize=(20, 5))
 
@@ -97,6 +111,19 @@ def display_scene(id,infrared=False,resize=False):
     axs[0].axis('off')
     axs[1].imshow(mask, cmap='gray')
     axs[1].axis('off')
+
+def rgb_from_stack(stack,infrared=False,contrast=0.2):
+    """Convert a stacked array of bands to RGB"""
+    if infrared:
+        rgb = stack[:,:,[3,1,0]]
+    else:
+        rgb = stack[:,:,[2,1,0]]
+    
+    rgb = rgb.astype(np.float32)
+    rgb = np.clip(rgb*0.0000275-0.2, 0, 1)
+    rgb = np.clip(rgb,0,contrast)/contrast
+
+    return rgb
 
 
 def get_rgb(id,infrared=False):
@@ -131,6 +158,13 @@ def get_rgb(id,infrared=False):
     
     return RGB
 
+def scale_bands(bands):
+    """Scale bands to 0-1"""
+    bands = bands.astype('float32')
+    bands = np.clip(bands*0.0000275-0.2, 0, 1)
+
+    return bands
+
 def trim_RGB(RGB):
 
     """Trim the edges of the image for label studio"""
@@ -152,3 +186,71 @@ def untrim_label(label):
     label = np.pad(label, ((trim,trim),(trim,trim+100)), 'constant', constant_values=0)
 
     return label
+
+def edge_from_mask(mask):
+    """Get edge map from mask"""
+
+
+    dy,dx = np.gradient(mask)
+    grad = np.abs(dx) + np.abs(dy)
+    edge = np.array([grad > 0])[0]
+    edge = edge.astype(np.uint8)
+    
+    return edge
+
+def get_cloud_mask(val,type='cloud'):
+    
+    """Get mask for a specific cover type"""
+
+    # convert to binary
+    bin_ = '{0:016b}'.format(val)
+
+    # reverse string
+    str_bin = str(bin_)[::-1]
+
+    # get bit for cover type
+    bits = {'cloud':3,'shadow':4,'dilated_cloud':1,'cirrus':2}
+    bit = str_bin[bits[type]]
+
+    if bit == '1':
+        return 0 # cover
+    else:
+        return 1 # no cover
+
+# MODELLING 
+
+def get_index(bands,index='NDWI'):
+
+        channels = ['Blue', 'Green', 'Red', 'NIR', 'SWIR1', 'SWIR2', 'Thermal']
+        standards = ['B','G','R','N','S1','S2','T']
+
+        """Add indices to image"""
+
+        img = bands.copy()
+
+        img = img[:,:,[0,1,2,3,4,5,6]]
+        img = scale_bands(img)
+
+
+        da = xr.DataArray(
+            img,
+            dims = ("x","y","band"),
+            coords = {"band": channels}
+        )
+
+        params = {standard: da.sel(band = channel) for standard,channel in zip(standards,channels)}
+
+        idx = spyndex.computeIndex(
+            index = [index],
+            params = params)
+        
+        idx = np.array(idx)
+        
+        #img = np.array(np.vstack((img,idx)))
+
+        return idx
+
+#=====================================================================================================
+#========================================  EVALUATION  ===============================================
+#=====================================================================================================
+
