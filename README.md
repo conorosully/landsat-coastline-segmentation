@@ -11,7 +11,7 @@ This code is only for academic and research purposes. Please cite the above pape
 
 We have used the following dataset in our analysis: 
 
-1. Sentinel-2 Water Edges Dataset (SWED) found [here](https://zenodo.org/records/8414665).
+1. The Landsat Irish Coastal Segmentation (LICS) Dataset found [here](https://zenodo.org/records/8414665).
 
  The data is available under the Creative Commons Attribution 4.0 International license.
 
