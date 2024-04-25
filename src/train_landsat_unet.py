@@ -11,7 +11,7 @@ import glob
 
 import cv2 as cv
 from PIL import Image
-from osgeo import gdal
+#from osgeo import gdal
 
 import torch
 import torch.nn as nn
@@ -64,8 +64,8 @@ class TrainDataset(torch.utils.data.Dataset):
         instance = np.load(path)
 
         # Get spectral bands
-        bands = instance[:, :, :-1]
-        bands = bands[:, :, incl_bands]  # Only include specified bands
+        #bands = instance[:, :, :-1]
+        bands = instances[:, :, incl_bands]  # Only include specified bands
         bands = bands.astype(np.float32)
 
         # Normalise bands
@@ -94,6 +94,10 @@ def load_data():
 
     paths = glob.glob(train_path + "*")
     print("Training images: {}".format(len(paths)))
+    train_sample = np.load(paths[0])
+
+    print("Image shape: {}".format(train_sample.shape))
+    print()
 
     if sample:
         paths = paths[:1000]
