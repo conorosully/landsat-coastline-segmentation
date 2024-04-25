@@ -22,11 +22,10 @@ from torch.utils.data import DataLoader
 from network import U_Net, R2U_Net, AttU_Net, R2AttU_Net
 
 # Variables
-train_path = "../data/training/"  # UPDATE
+train_path = "../../data/LICS/train/"  # UPDATE
 save_path = "../models/{}.pth"  # UPDATE
 # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 device = torch.device("mps")  # UPDATE
-batch_size = 32
 early_stopping = 10
 
 # System arguments
@@ -35,17 +34,21 @@ try:
     sample = sys.argv[2] == "True"
     incl_bands = np.array(list(sys.argv[3])).astype(int) - 1
     model_type = sys.argv[4]
+    batch_size = int(sys.argv[5])
 
     print("Training model: {}".format(model_name))
     print("Sample: {}".format(sample))
     print("Include bands: {}".format(incl_bands))
     print("Model type: {}".format(model_type))
     print("Using device: {}\n".format(device))
+    print("Batch size: {}".format(batch_size))
+
 except:
     model_name = "DEFAULT"
     sample = False
     incl_bands = np.array([0, 1, 2, 3, 4, 5, 6])
     model_type = "U_Net"
+    batch_size = 32
 
 
 # Classes
