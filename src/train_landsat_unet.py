@@ -27,6 +27,7 @@ save_path = "../models/{}.pth"  # UPDATE
 # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 device = torch.device("mps")  # UPDATE
 batch_size = 32
+early_stopping = 10
 
 # System arguments
 try:
@@ -136,13 +137,15 @@ def train_model(train_loader, valid_loader, ephocs=50):
 
     # specify loss function (binary cross-entropy)
     criterion = nn.CrossEntropyLoss()
-    sm = nn.Softmax(dim=1)
+    #sm = nn.Softmax(dim=1)
 
     # specify optimizer
     optimizer = torch.optim.Adam(model.parameters())
 
     # Train the model
     min_loss = np.inf
+    epochs_no_improve = 0  # Counter for epochs with no improvement in validation loss
+
 
     for epoch in range(ephocs):
         print("Epoch {} |".format(epoch + 1), end=" ")
@@ -158,7 +161,7 @@ def train_model(train_loader, valid_loader, ephocs=50):
 
             # Execute model to get outputs
             output = model(images)
-            output = sm(output)
+            #output = sm(output)
 
             # Calculate loss
             loss = criterion(output, target)
@@ -179,7 +182,7 @@ def train_model(train_loader, valid_loader, ephocs=50):
 
             output = model(images)
 
-            loss = criterion(output, target)
+            loss = criterion(output, target) 
 
             valid_loss += loss.item()
 
@@ -191,6 +194,13 @@ def train_model(train_loader, valid_loader, ephocs=50):
             torch.save(model, save_path.format(model_name))
 
             min_loss = valid_loss
+            epochs_no_improve = 0  # Reset counter
+        else:
+            epochs_no_improve += 1
+        
+        if early_stopping != -1 and epochs_no_improve >= early_stopping:
+            print("Early stopping triggered after {} epochs with no improvement.".format(epochs_no_improve))
+            break  # Break out of the loop
 
 
 if __name__ == "__main__":
