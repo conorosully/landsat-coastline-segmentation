@@ -44,10 +44,17 @@ def permutate_bands(img, bands):
     return img
 
 
-def get_preds(model, test_paths, batch_size=10, target_pos=-2, bands=None):
-    """Get model predictions for a given dataloader"""
+class Args:
+    def __init__(self, target_pos, incl_bands):
+        self.target_pos = target_pos
+        self.incl_bands = incl_bands
 
-    test_data = TrainDataset(test_paths, target_pos)
+def get_preds(model, test_paths, batch_size=10, target_pos=-1, incl_bands=[0, 1, 2, 3, 4, 5, 6],perm_bands=None,device='mps'):
+    """Get model predictions for a given dataloader"""
+    
+    
+    args = Args(target_pos, incl_bands)
+    test_data = TrainDataset(test_paths, args)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
     sm = nn.Softmax(dim=1)
 
@@ -56,9 +63,9 @@ def get_preds(model, test_paths, batch_size=10, target_pos=-2, bands=None):
 
     for images, target in iter(test_loader):
         # permutate bands
-        if bands != None:
+        if perm_bands != None:
             for i in range(len(images)):
-                images[i] = permutate_bands(images[i], bands)
+                images[i] = permutate_bands(images[i], perm_bands)
 
         images = images.to(device)
 
