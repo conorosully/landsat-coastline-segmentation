@@ -3,7 +3,7 @@ Segmenting satellite images of Ireland's coastline into land and ocean pixels.
 
 This repository contains the code required to reproduce the results in the conference paper:
 
-> To update
+O’Sullivan, C., Kashyap, A., Coveney, S., Monteys, X. and Dev, S., 2024. Enhancing coastal water body segmentation with Landsat Irish Coastal Segmentation (LICS) dataset. Remote Sensing Applications: Society and Environment, p.101276. [available here](https://www.sciencedirect.com/science/article/pii/S235293852400140X).
 
 This code is only for academic and research purposes. Please cite the above paper if you intend to use whole/part of the code. 
 
